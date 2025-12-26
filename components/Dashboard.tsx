@@ -11,6 +11,7 @@ import SmartAlerts from './SmartAlerts';
 import ManualResultEntry from './ManualResultEntry';
 import DebugLotoVen from './DebugLotoVen';
 import StatisticalAnalysis from './StatisticalAnalysis';
+import { HistoricalDataLoader } from './HistoricalDataLoader';
 
 interface DashboardProps {
   lotteryId: LotteryId;
@@ -34,6 +35,7 @@ const Dashboard: React.FC<DashboardProps> = ({ lotteryId, onLotteryChange, onNav
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [showDebugLotoVen, setShowDebugLotoVen] = useState(false);
   const [showStatisticalAnalysis, setShowStatisticalAnalysis] = useState(false);
+  const [showHistoricalLoader, setShowHistoricalLoader] = useState(false);
   const [realDataStats, setRealDataStats] = useState<any>(null);
 
   const isLottoActivo = lotteryId === 'LOTTO_ACTIVO';
@@ -215,6 +217,13 @@ const Dashboard: React.FC<DashboardProps> = ({ lotteryId, onLotteryChange, onNav
                 title="Debug LotoVen"
               >
                 <span className="material-symbols-outlined text-xl">bug_report</span>
+              </button>
+              <button 
+                onClick={() => setShowHistoricalLoader(true)}
+                className="size-10 rounded-full bg-white/20 dark:bg-black/20 flex items-center justify-center"
+                title="Cargar Datos Históricos"
+              >
+                <span className="material-symbols-outlined text-xl">history</span>
               </button>
               <button 
                 onClick={() => setShowManualEntry(true)}
@@ -448,6 +457,33 @@ const Dashboard: React.FC<DashboardProps> = ({ lotteryId, onLotteryChange, onNav
         isVisible={showStatisticalAnalysis}
         onClose={() => setShowStatisticalAnalysis(false)}
       />
+      
+      {showHistoricalLoader && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                📚 Carga de Datos Históricos Masivos
+              </h2>
+              <button
+                onClick={() => setShowHistoricalLoader(false)}
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="p-4">
+              <HistoricalDataLoader
+                lotteryId={lotteryId}
+                onDataLoaded={(stats) => {
+                  setRealDataStats(stats);
+                  hydrate(); // Actualizar datos después de la carga
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

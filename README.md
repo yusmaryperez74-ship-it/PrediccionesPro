@@ -6,10 +6,11 @@ Una aplicación web que utiliza **ÚNICAMENTE datos reales** de LotoVen para gen
 
 **Esta aplicación muestra análisis estadístico basado en resultados históricos REALES. NO garantiza premios ni resultados futuros. La lotería es un proceso aleatorio. Todos los datos provienen de fuentes verificadas sin simulaciones.**
 
-## 🌐 **FUENTE DE DATOS: SOLO LOTOVEN**
+## 🌐 **FUENTES DE DATOS: LOTOVEN + LOTERIADEHOY**
 
 ### **Datos 100% Reales**
-- ✅ **Fuente Única**: https://lotoven.com/animalitos/
+- ✅ **Fuente Principal**: https://lotoven.com/animalitos/ (resultados del día)
+- ✅ **Fuente Histórica**: https://loteriadehoy.com/animalito/ (datos masivos históricos)
 - ✅ **Sin Simulaciones**: Cero datos ficticios o generados
 - ✅ **Historial Persistente**: Los resultados no cambian una vez guardados
 - ✅ **Verificación Continua**: Actualización solo con datos reales nuevos
@@ -51,6 +52,7 @@ score = (frecuencia_reciente * 0.5) + (frecuencia_total * 0.3) + (dias_sin_salir
 
 ### **Fuentes de Datos Reales**
 - 🌐 **Integración LotoVen**: Resultados en tiempo real desde https://lotoven.com/animalitos/
+- 📚 **Datos Históricos Masivos**: Carga automática desde https://loteriadehoy.com/animalito/
 - 🔄 **Sistema de Fallback**: Múltiples fuentes de datos
 - 💾 **Cache Inteligente**: Optimización de rendimiento
 - 🛡️ **Manejo de Errores**: Robusto y confiable
@@ -130,10 +132,18 @@ interface PredictionScore {
 ## 🎯 **Servicios Principales**
 
 ### **RealResultsService** - Gestor de Datos Reales
-- Conexión directa con LotoVen
+- Conexión directa con LotoVen para resultados del día
+- Integración con LoteriaDehoy para datos históricos masivos
 - Historial persistente e inmutable
 - Cache optimizado para datos reales
 - Sin simulaciones ni datos ficticios
+
+### **LoteriaDehoyService** - Scraping de Datos Históricos
+- Scraping automatizado de https://loteriadehoy.com/animalito/
+- Carga masiva de hasta 20 páginas de historial
+- Manejo de proxies CORS para acceso web
+- Deduplicación automática de resultados
+- Conversión a formato de aplicación
 
 ### **StatisticalAnalysisService** - Motor Estadístico Puro
 - Análisis estadístico puro basado en datos históricos reales
@@ -160,6 +170,13 @@ interface PredictionScore {
 - Tabs organizados por categorías
 - Información completa de cada animal
 - Explicaciones en lenguaje simple
+
+### **Carga de Datos Históricos**
+- Vista de carga masiva de datos históricos
+- Estadísticas de scraping en tiempo real
+- Control de páginas a procesar (5, 10, 20)
+- Deduplicación automática
+- Progreso visual de carga
 
 ### **Herramientas de Debug**
 - Test de integración LotoVen

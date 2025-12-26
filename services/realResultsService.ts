@@ -1,6 +1,6 @@
 import { LotteryId, DrawResult, Animal } from '../types';
-import { ANIMALS } from '../constants';
 import { LotoVenService } from './lotovenService';
+import loteriaDehoyService from './loteriaDehoyService';
 
 /**
  * SERVICIO DE RESULTADOS REALES - SOLO DATOS DE LOTOVEN
@@ -16,7 +16,7 @@ export interface RealHistoryEntry {
   animal: Animal;
   animalData: Animal;
   number: string;
-  source: 'LotoVen';
+  source: 'LotoVen' | 'LoteriaDehoy' | 'Manual';
   timestamp: number; // Para garantizar persistencia
 }
 
@@ -166,8 +166,162 @@ export class RealResultsService {
   }
   
   /**
-   * Agregar resultado manual (para correcciones)
+   * Cargar historial masivo desde LoteriaDehoy (una sola vez)
    */
+  static async loadMassiveHistoricalData(lotteryId: LotteryId, maxPaginas: number = 10): Promise<{
+    success: boolean;
+    loaded: number;
+    duplicates: number;
+    errors: number;
+  }> {
+    console.log(`📚 [RealResults] Loading massive historical data for ${lotteryId} from LoteriaDehoy...`);
+    
+    try {
+      // Verificar si ya se cargaron datos masivos
+      const lastMassiveLoad = localStorage.getItem(`massive_load_${lotteryId}`);
+      if (lastMassiveLoad) {
+        const lastDate = new Date(lastMassiveLoad);
+        const daysSince = (Date.now() - lastDate.getTime()) / (1000 * 60 * 60 * 24);
+        
+        if (daysSince < 7) { // Solo recargar si han pasado más de 7 días
+          console.log(`⏭️ [RealResults] Massive data already loaded recently (${Math.floor(daysSince)} days ago)`);
+          return { success: true, loaded: 0, duplicates: 0, errors: 0 };
+        }
+      }
+      
+      // Obtener datos históricos masivos
+      const lotteryName = lotteryId === 'LOTTO_ACTIVO' ? 'Lotto Activo' : 'Guácharo Activo';
+      const historicalData = await loteriaDehoyService.obtenerResultados(lotteryName as any, maxPaginas);
+      
+      if (historicalData.length === 0) {
+        console.warn(`⚠️ [RealResults] No historical data obtained from LoteriaDehoy`);
+        return { success: false, loaded: 0, duplicates: 0, errors: 0 };
+      }
+      
+      // Convertir al formato de la aplicación
+      const convertedData = loteriaDehoyService.convertirAFormatoApp(historicalData);
+      
+      // Cargar historial existente
+      let existingHistory = this.getPersistentHistory(lotteryId);
+      
+      let loaded = 0;
+      let duplicates = 0;
+      let errors = 0;
+      
+      // Procesar cada resultado histórico
+      for (const item of convertedData) {
+        try {
+          if (item.lotteryType !== (lotteryId === 'LOTTO_ACTIVO' ? 'lotto-activo' : 'guacharo-activo')) continue; // Solo procesar la lotería solicitada
+          
+          // Verificar si ya existe
+          const exists = existingHistory.find(h => 
+            h.date === item.date && 
+            h.hour === item.time &&
+            h.number === item.animalNumber
+          );
+          
+          if (exists) {
+            duplicates++;
+            continue;
+          }
+          
+          // Buscar el animal correspondiente
+          const animal = this.findAnimalByNumber(item.animalNumber);
+          if (!animal) {
+            console.warn(`⚠️ Animal not found for number: ${item.animalNumber}`);
+            errors++;
+            continue;
+          }
+          
+          // Crear nueva entrada histórica
+          const newEntry: RealHistoryEntry = {
+            date: item.date,
+            hour: item.time,
+            animal: animal,
+            animalData: animal,
+            number: item.animalNumber,
+            source: 'LoteriaDehoy',
+            timestamp: new Date(item.timestamp).getTime()
+          };
+          
+          existingHistory.push(newEntry);
+          loaded++;
+          
+        } catch (error) {
+          console.error(`❌ Error processing historical entry:`, error);
+          errors++;
+        }
+      }
+      
+      // Ordenar y guardar historial actualizado
+      existingHistory.sort((a, b) => {
+        const dateCompare = b.date.localeCompare(a.date);
+        if (dateCompare !== 0) return dateCompare;
+        return b.hour.localeCompare(a.hour);
+      });
+      
+      this.savePersistentHistory(lotteryId, existingHistory);
+      
+      // Marcar como cargado masivamente
+      localStorage.setItem(`massive_load_${lotteryId}`, new Date().toISOString());
+      
+      console.log(`✅ [RealResults] Massive load completed: ${loaded} loaded, ${duplicates} duplicates, ${errors} errors`);
+      
+      return { success: true, loaded, duplicates, errors };
+      
+    } catch (error: any) {
+      console.error(`❌ [RealResults] Error in massive historical load:`, error);
+      return { success: false, loaded: 0, duplicates: 0, errors: 1 };
+    }
+  }
+  
+  /**
+   * Buscar animal por número
+   */
+  private static findAnimalByNumber(number: string): Animal | null {
+    // Mapeo básico de números a animales (esto debería venir de constants.ts)
+    const animalMap: { [key: string]: Animal } = {
+      '00': { id: '00', number: '00', name: 'Delfín', emoji: '🐬' },
+      '01': { id: '01', number: '01', name: 'Carnero', emoji: '🐏' },
+      '02': { id: '02', number: '02', name: 'Toro', emoji: '🐂' },
+      '03': { id: '03', number: '03', name: 'Ciempiés', emoji: '🐛' },
+      '04': { id: '04', number: '04', name: 'Alacrán', emoji: '🦂' },
+      '05': { id: '05', number: '05', name: 'León', emoji: '🦁' },
+      '06': { id: '06', number: '06', name: 'Rana', emoji: '🐸' },
+      '07': { id: '07', number: '07', name: 'Perico', emoji: '🦜' },
+      '08': { id: '08', number: '08', name: 'Ratón', emoji: '🐭' },
+      '09': { id: '09', number: '09', name: 'Águila', emoji: '🦅' },
+      '10': { id: '10', number: '10', name: 'Tigre', emoji: '🐅' },
+      '11': { id: '11', number: '11', name: 'Gato', emoji: '🐱' },
+      '12': { id: '12', number: '12', name: 'Caballo', emoji: '🐴' },
+      '13': { id: '13', number: '13', name: 'Mono', emoji: '🐵' },
+      '14': { id: '14', number: '14', name: 'Paloma', emoji: '🕊️' },
+      '15': { id: '15', number: '15', name: 'Zorro', emoji: '🦊' },
+      '16': { id: '16', number: '16', name: 'Oso', emoji: '🐻' },
+      '17': { id: '17', number: '17', name: 'Pavo', emoji: '🦃' },
+      '18': { id: '18', number: '18', name: 'Burro', emoji: '🫏' },
+      '19': { id: '19', number: '19', name: 'Chivo', emoji: '🐐' },
+      '20': { id: '20', number: '20', name: 'Cochino', emoji: '🐷' },
+      '21': { id: '21', number: '21', name: 'Gallo', emoji: '🐓' },
+      '22': { id: '22', number: '22', name: 'Camello', emoji: '🐪' },
+      '23': { id: '23', number: '23', name: 'Cebra', emoji: '🦓' },
+      '24': { id: '24', number: '24', name: 'Iguana', emoji: '🦎' },
+      '25': { id: '25', number: '25', name: 'Gallina', emoji: '🐔' },
+      '26': { id: '26', number: '26', name: 'Vaca', emoji: '🐄' },
+      '27': { id: '27', number: '27', name: 'Perro', emoji: '🐶' },
+      '28': { id: '28', number: '28', name: 'Zamuro', emoji: '🦅' },
+      '29': { id: '29', number: '29', name: 'Elefante', emoji: '🐘' },
+      '30': { id: '30', number: '30', name: 'Caimán', emoji: '🐊' },
+      '31': { id: '31', number: '31', name: 'Lapa', emoji: '🦜' },
+      '32': { id: '32', number: '32', name: 'Ardilla', emoji: '🐿️' },
+      '33': { id: '33', number: '33', name: 'Pescado', emoji: '🐟' },
+      '34': { id: '34', number: '34', name: 'Venado', emoji: '🦌' },
+      '35': { id: '35', number: '35', name: 'Jirafa', emoji: '🦒' },
+      '36': { id: '36', number: '36', name: 'Culebra', emoji: '🐍' }
+    };
+    
+    return animalMap[number] || null;
+  }
   static addManualResult(lotteryId: LotteryId, date: string, hour: string, animal: Animal): boolean {
     try {
       const history = this.getPersistentHistory(lotteryId);
@@ -190,7 +344,7 @@ export class RealResultsService {
         animal,
         animalData: animal,
         number: animal.number,
-        source: 'LotoVen',
+        source: 'Manual',
         timestamp: Date.now()
       };
       
